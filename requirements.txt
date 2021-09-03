@@ -1,2 +1,6 @@
 matplotlib
-pep8
+autopep8
+requests
+python-dotenv
+web3
+SQLAlchemy
