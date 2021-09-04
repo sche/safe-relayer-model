@@ -2,3 +2,4 @@
 .vscode
 mydb.sqlite
 *.pyc
+.env
