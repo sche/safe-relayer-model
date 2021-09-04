@@ -13,5 +13,5 @@ python3 src/create_db.py
 # Run calculations
 
 ```
-python3 src/run.py
+python3 src/run_model.py
 ```
