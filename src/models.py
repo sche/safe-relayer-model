@@ -28,7 +28,7 @@ class Block(Base):
     number = Column(Integer, primary_key=True)
     date = Column(DateTime, nullable=False)
     base_fee_per_gas = Column(Integer, nullable=False)
-    gas_used = Column(Integer, nullable = False)
+    gas_used = Column(Integer, nullable=False)
 
     def __repr__(self):
         return "<Block(number='%s', date='%s', base_fee_per_gas='%s', gas_used='%s')>" \
@@ -40,9 +40,9 @@ class Block(Base):
 
     @staticmethod
     def create(number, date, base_fee_per_gas, gas_used):
-        block = Block(number=number, 
+        block = Block(number=number,
                       date=date,
-                      base_fee_per_gas=base_fee_per_gas, 
+                      base_fee_per_gas=base_fee_per_gas,
                       gas_used=gas_used)
         db.session.add(block)
         db.session.commit()
@@ -65,7 +65,8 @@ class Block(Base):
         if block.number is not None:
             print("Indexed block #{}".format(block.number))
             return Block.create(number=number,
-                                date=datetime.utcfromtimestamp(block.timestamp),
+                                date=datetime.utcfromtimestamp(
+                                    block.timestamp),
                                 base_fee_per_gas=block.baseFeePerGas,
                                 gas_used=block.gasUsed)
         else:
@@ -77,21 +78,27 @@ class SafeTx(Base):
 
     tx_hash = Column(String, primary_key=True)
     block_number = Column(Integer, nullable=False)
+    tx_initiation_to_execution_time_sec = Column(Integer, nullable=False)
     base_fee_per_gas_price_difference = Column(Float, nullable=False)
     actual_fee_per_gas_price_difference = Column(Float, nullable=False)
 
     def __repr__(self):
-        return "<SafeTx(tx_hash='%s', block_number='%s', base_fee_per_gas_price_difference='%s', actual_fee_per_gas_price_difference='%s')>" \
-            % (self.tx_hash, self.block_number, self.base_fee_per_gas_price_difference, self.actual_fee_per_gas_price_difference)
+        return "<SafeTx(tx_hash='%s', block_number='%s', tx_initiation_to_execution_time_sec='%s', base_fee_per_gas_price_difference='%s', actual_fee_per_gas_price_difference='%s')>" \
+            % (self.tx_hash, self.block_number, self.tx_initiation_to_execution_time_sec, self.base_fee_per_gas_price_difference, self.actual_fee_per_gas_price_difference)
+
+    @staticmethod
+    def all():
+        return db.session.query(SafeTx).all()
 
     @staticmethod
     def __by(tx_hash):
         return db.session.query(SafeTx).filter(SafeTx.tx_hash == tx_hash).first()
 
     @staticmethod
-    def create(tx_hash, block_number, base_fee_per_gas_price_difference, actual_fee_per_gas_price_difference):
+    def create(tx_hash, block_number, tx_initiation_to_execution_time_sec, base_fee_per_gas_price_difference, actual_fee_per_gas_price_difference):
         tx = SafeTx(tx_hash=tx_hash,
                     block_number=block_number,
+                    tx_initiation_to_execution_time_sec=tx_initiation_to_execution_time_sec,
                     base_fee_per_gas_price_difference=base_fee_per_gas_price_difference,
                     actual_fee_per_gas_price_difference=actual_fee_per_gas_price_difference)
         db.session.add(tx)
@@ -117,10 +124,12 @@ class SafeTx(Base):
             print("Indexed safe_tx_hash=", safe_tx_hash)
             tx_data = r.json()
 
+            tx_initiation_to_execution_time_sec = SafeTx.__get_tx_initiation_to_execution_time(
+                tx_data).total_seconds()
+
             block_for_first_confirmation = SafeTx.__get_block_for_first_confirmation(
                 tx_data)
             block_for_execution = Block.get_block(tx_data['blockNumber'])
-
             base_fee_per_gas_price_difference = block_for_execution.base_fee_per_gas - \
                 block_for_first_confirmation.base_fee_per_gas
 
@@ -129,6 +138,7 @@ class SafeTx(Base):
 
             tx = SafeTx.create(tx_hash=safe_tx_hash,
                                block_number=tx_data['blockNumber'],
+                               tx_initiation_to_execution_time_sec=tx_initiation_to_execution_time_sec,
                                base_fee_per_gas_price_difference=base_fee_per_gas_price_difference,
                                actual_fee_per_gas_price_difference=0)
             return tx
