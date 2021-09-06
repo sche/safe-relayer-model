@@ -4,3 +4,4 @@ requests
 python-dotenv
 web3
 SQLAlchemy
+scipy

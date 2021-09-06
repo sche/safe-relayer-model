@@ -10,8 +10,14 @@
 python3 src/create_db.py
 ```
 
-# Run calculations
+# Process transactions (prepare data)
 
 ```
-python3 src/run_model.py
+python3 src/process_transactions.py
+```
+
+# Build plots
+
+```
+python3 src/show_tx_init_to_execute.py
 ```
