@@ -7,20 +7,12 @@ from dotenv import dotenv_values
 from web3 import Web3
 from datetime import datetime, timedelta
 import time
+from dateutil import tz
 
 
 Base = declarative_base()
 config = dotenv_values(".env")
 w3 = Web3(Web3.HTTPProvider(config['INFURA_MAINNET']))
-AVARAGE_BLOCK_TIME = timedelta(seconds=13)
-
-
-def parse_date(date_string):
-    try:
-        return datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S%z').replace(tzinfo=None)
-    except Exception:
-        return datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S.%f%z').replace(tzinfo=None)
-
 
 class Block(Base):
     __tablename__ = 'blocks'
@@ -49,7 +41,7 @@ class Block(Base):
         return block
 
     @staticmethod
-    def get_block(number):
+    def get_block_by_number(number):
         attempts = 0
         b = Block.by(number)
         while b is None and attempts < 5:
@@ -58,6 +50,41 @@ class Block(Base):
                 time.sleep(3)
             attempts += 1
         return b
+    
+    @staticmethod
+    def get_block_by_time(block_time):
+        attempts = 0
+        number = Block.__get_block_number_by_time(block_time)
+        while number is None and attempts < 5:
+            time.sleep(3)
+            attempts += 1
+            number = Block.__get_block_number_by_time(block_time)
+            
+        if number is None:
+            return None
+        
+        return Block.get_block_by_number(int(number))
+        
+        
+    
+    @staticmethod
+    def __get_block_number_by_time(time):
+        # inpurt date format example: '2021-10-01 14:50:03.065392+00' or '2021-10-01 14:12:02+00'
+        assert(time[-3:] == '+00')
+        try:
+            date = datetime.strptime(time[:-3], '%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=tz.tzutc())
+        except Exception:
+            date = datetime.strptime(time[:-3], '%Y-%m-%d %H:%M:%S').replace(tzinfo=tz.tzutc())
+                
+        timestamp = int(datetime.timestamp(date))
+        
+        url = "https://api.etherscan.io/api?module=block&action=getblocknobytime&timestamp={}&closest=before&apikey={}".format(timestamp, config['ETHERSCAN_API_KEY'])
+        r = requests.get(url)
+        if r.status_code == 200:
+            print("Found block number: ", r.json()['result'])
+            return r.json()['result']
+        else:
+            return None
 
     @staticmethod
     def __index_block(number):
@@ -76,132 +103,87 @@ class Block(Base):
 class SafeTx(Base):
     __tablename__ = 'transactions'
 
-    tx_hash = Column(String, primary_key=True)
+    safe_tx_hash = Column(String, primary_key=True)
     block_number = Column(Integer, nullable=False)
+    # exectution time minus first confirmation time
     tx_initiation_to_execution_time_sec = Column(Integer, nullable=False)
-    base_fee_per_gas_price_difference = Column(Float, nullable=False)
-    actual_fee_per_gas_price_difference = Column(Float, nullable=False)
+    # execution block base fee minus first confirmation (previous) block base fee
+    execution_to_initiation_base_fee_difference = Column(Float, nullable=False)
+    # execution tx fee payed minus first confirmation (previous) block estimated avarage tx fee
+    execution_to_initiation_paied_fee_difference = Column(Float, nullable=False)
+    # execution tx fee payed minus execution tx block estimated avarage tx fee
+    execution_fee_to_avarage_fee_difference = Column(Float, nullable=False)
 
     def __repr__(self):
-        return "<SafeTx(tx_hash='%s', block_number='%s', tx_initiation_to_execution_time_sec='%s', base_fee_per_gas_price_difference='%s', actual_fee_per_gas_price_difference='%s')>" \
-            % (self.tx_hash, self.block_number, self.tx_initiation_to_execution_time_sec, self.base_fee_per_gas_price_difference, self.actual_fee_per_gas_price_difference)
+        return "<SafeTx(safe_tx_hash='%s', block_number='%s', tx_initiation_to_execution_time_sec='%s', execution_to_initiation_base_fee_difference='%s', execution_to_initiation_paied_fee_difference='%s', execution_fee_to_avarage_fee_difference='%s')>" \
+            % (self.safe_tx_hash, self.block_number, self.tx_initiation_to_execution_time_sec, self.execution_to_initiation_base_fee_difference, self.execution_to_initiation_paied_fee_difference, self.execution_fee_to_avarage_fee_difference)
 
     @staticmethod
     def all():
         return db.session.query(SafeTx).all()
 
     @staticmethod
-    def __by(tx_hash):
-        return db.session.query(SafeTx).filter(SafeTx.tx_hash == tx_hash).first()
+    def __by(safe_tx_hash):
+        return db.session.query(SafeTx).filter(SafeTx.safe_tx_hash == safe_tx_hash).first()
 
     @staticmethod
-    def create(tx_hash, block_number, tx_initiation_to_execution_time_sec, base_fee_per_gas_price_difference, actual_fee_per_gas_price_difference):
-        tx = SafeTx(tx_hash=tx_hash,
+    def create(safe_tx_hash, 
+               block_number, 
+               tx_initiation_to_execution_time_sec, 
+               execution_to_initiation_base_fee_difference, 
+               execution_to_initiation_paied_fee_difference, 
+               execution_fee_to_avarage_fee_difference):
+        tx = SafeTx(safe_tx_hash=safe_tx_hash,
                     block_number=block_number,
                     tx_initiation_to_execution_time_sec=tx_initiation_to_execution_time_sec,
-                    base_fee_per_gas_price_difference=base_fee_per_gas_price_difference,
-                    actual_fee_per_gas_price_difference=actual_fee_per_gas_price_difference)
+                    execution_to_initiation_base_fee_difference=execution_to_initiation_base_fee_difference,
+                    execution_to_initiation_paied_fee_difference=execution_to_initiation_paied_fee_difference,
+                    execution_fee_to_avarage_fee_difference=execution_fee_to_avarage_fee_difference)
         db.session.add(tx)
         db.session.commit()
         return tx
 
     @staticmethod
-    def process_transaction(safe_tx_hash):
-        attempts = 0
-        t = SafeTx.__by(safe_tx_hash)
-        while t is None and attempts < 5:
-            t = SafeTx.__index_transaction(safe_tx_hash)
-            if attempts > 0:
-                time.sleep(3)
-            attempts += 1
-        return t
-
-    @staticmethod
-    def __index_transaction(safe_tx_hash):
-        r = requests.get(
-            '{}api/v1/multisig-transactions/{}/'.format(config['TX_SERVICE_MAINNET'], safe_tx_hash))
-        if r.status_code == 200:
-            print("Indexed safe_tx_hash=", safe_tx_hash)
-            tx_data = r.json()
-
-            tx_initiation_to_execution_time_sec = SafeTx.__get_tx_initiation_to_execution_time(
-                tx_data).total_seconds()
-
-            block_for_first_confirmation = SafeTx.__get_block_for_first_confirmation(
-                tx_data)
-            block_for_execution = Block.get_block(tx_data['blockNumber'])
-            base_fee_per_gas_price_difference = block_for_execution.base_fee_per_gas - \
-                block_for_first_confirmation.base_fee_per_gas
-
-            # TODO: find actual price
-            # block reward - 2 Ether / gas used = tip gas fee
-
-            tx = SafeTx.create(tx_hash=safe_tx_hash,
-                               block_number=tx_data['blockNumber'],
-                               tx_initiation_to_execution_time_sec=tx_initiation_to_execution_time_sec,
-                               base_fee_per_gas_price_difference=base_fee_per_gas_price_difference,
-                               actual_fee_per_gas_price_difference=0)
-            return tx
-        return None
-
-    @staticmethod
-    def __get_block_for_first_confirmation(tx_data):
-        init_to_execute_time = SafeTx.__get_tx_initiation_to_execution_time(
-            tx_data)
-        init_to_execute_blocks = int(
-            init_to_execute_time.total_seconds() / AVARAGE_BLOCK_TIME.total_seconds())
-        expected_block_number_for_first_confirmation = tx_data['blockNumber'] - \
-            init_to_execute_blocks
-
-        search_block = Block.get_block(
-            expected_block_number_for_first_confirmation)
-        first_confirmation_date = SafeTx.__get_confirmation_dates(tx_data)[0]
-
-        while search_block.date < first_confirmation_date:
-            expected_block_number_for_first_confirmation += 1
-            search_block = Block.get_block(
-                expected_block_number_for_first_confirmation)
-
-        while search_block.date > first_confirmation_date:
-            expected_block_number_for_first_confirmation -= 1
-            search_block = Block.get_block(
-                expected_block_number_for_first_confirmation)
-
-        return search_block
-
-    @staticmethod
-    def __get_tx_initiation_to_execution_time(tx_data):
-        confirmation_dates = SafeTx.__get_confirmation_dates(tx_data)
-        execution_date = parse_date(tx_data['executionDate'])
-        return execution_date - confirmation_dates[0]
-
-    @staticmethod
-    def __get_confirmation_dates(tx_data):
-        return sorted([parse_date(c['submissionDate']) for c in tx_data['confirmations']])
+    def process_transaction(data):
+        """
+        data: [safe_tx_hash, block_number, created, executed, created_to_executed, eth_tx_hash]
+        """
+        (safe_tx_hash, block_number, created, executed, created_to_executed, eth_tx_hash) = tuple(data)
+        
+        block_of_initiation = Block.get_block_by_time(created)
+        block_of_execution = Block.get_block_by_number(int(block_number))
+        
+        execution_to_initiation_base_fee_difference = block_of_execution.base_fee_per_gas - block_of_initiation.base_fee_per_gas
+            
+        # Get block reward        
+        # Substract 2
+        # Devide it by gas used --> reward per block
+        # Calculate estimated tx price at the moment of initiation
+            
 
 
-class Model(Base):
-    __tablename__ = 'model'
+# class Model(Base):
+#     __tablename__ = 'model'
 
-    id = Column(Integer, primary_key=True)
-    tx = relationship(SafeTx)
-    tx_hash = Column(Integer, ForeignKey('transactions.tx_hash'))
-    predicted_price = Column(Integer, nullable=False)
-    actual_price = Column(Integer, nullable=False)
+#     id = Column(Integer, primary_key=True)
+#     tx = relationship(SafeTx)
+#     tx_hash = Column(Integer, ForeignKey('transactions.tx_hash'))
+#     predicted_price = Column(Integer, nullable=False)
+#     actual_price = Column(Integer, nullable=False)
 
-    def __repr__(self):
-        return "<Model(id='%s', tx='%s', predicted_price='%s', actual_price='%s')>" \
-            % (self.id, self.tx, self.predicted_price, self.actual_price)
+#     def __repr__(self):
+#         return "<Model(id='%s', tx='%s', predicted_price='%s', actual_price='%s')>" \
+#             % (self.id, self.tx, self.predicted_price, self.actual_price)
 
-    @staticmethod
-    def by(tx_hash):
-        return db.session.query(SafeTx).filter(SafeTx.tx.tx_hash == tx_hash).first()
+#     @staticmethod
+#     def by(tx_hash):
+#         return db.session.query(SafeTx).filter(SafeTx.tx.tx_hash == tx_hash).first()
 
-    @staticmethod
-    def create(tx, predicted_price, actual_price):
-        model = Model(tx=tx,
-                      predicted_price=predicted_price,
-                      actual_price=actual_price)
-        db.session.add(model)
-        db.session.commit()
-        return model
+#     @staticmethod
+#     def create(tx, predicted_price, actual_price):
+#         model = Model(tx=tx,
+#                       predicted_price=predicted_price,
+#                       actual_price=actual_price)
+#         db.session.add(model)
+#         db.session.commit()
+#         return model

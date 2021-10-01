@@ -3,3 +3,4 @@
 mydb.sqlite
 *.pyc
 .env
+transactions.csv

@@ -1,13 +1,13 @@
-
 from models import SafeTx
+from csv import reader
 
 
 def main():
-    # parse file and load transactions data
-    lines = tuple(open('safe_tx_hashes_test.txt', 'r'))
-    for line in lines:
-        safe_tx_hash = line.strip()
-        SafeTx.process_transaction(safe_tx_hash)
+    with open('transactions.csv', 'r') as read_obj:
+        csv_reader = reader(read_obj)
+        header = next(csv_reader)
+        for row in csv_reader:
+            SafeTx.process_transaction(row)
 
 
 if __name__ == '__main__':

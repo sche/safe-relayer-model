@@ -10,7 +10,7 @@ def main():
     transactions = SafeTx.all()
     
     fig = plt.figure(constrained_layout=True)
-    fig.suptitle('1000 Safe tranasactions data sample')
+    fig.suptitle('Safe tranasactions data sample')
     
     subfigs = fig.subfigures(5, 1)
     subfigs[0].suptitle('tx initiation to execution (time in min)')
