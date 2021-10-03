@@ -53,26 +53,26 @@ def main():
     
     # Transaction gas difference
     
-    gweis = [round(t.base_fee_per_gas_price_difference / 1_000_000_000) for t in transactions]
+    gweis = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in transactions]
     axs2[0].hist(gweis, 50)
     
-    irm_gweis = [round(t.base_fee_per_gas_price_difference / 1_000_000_000) for t in irm_transactions]
+    irm_gweis = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in irm_transactions]
     axs2[1].hist(irm_gweis, 50)
     
-    zscore_gweis = [round(t.base_fee_per_gas_price_difference / 1_000_000_000) for t in zscore_transactions]
+    zscore_gweis = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in zscore_transactions]
     axs2[2].hist(zscore_gweis, 50)
     
     # Transaction gas difference without zeroes
     
-    gweis_without_zeroes = [round(t.base_fee_per_gas_price_difference / 1_000_000_000) for t in transactions if t.base_fee_per_gas_price_difference != 0]
+    gweis_without_zeroes = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in transactions if t.execution_to_initiation_base_fee_difference_gwei != 0]
     axs3[0].hist(gweis_without_zeroes, 50)
     axs3[0].spines.left.set_position('zero')
     
-    irm_gweis_without_zeroes = [round(t.base_fee_per_gas_price_difference / 1_000_000_000) for t in irm_transactions if t.base_fee_per_gas_price_difference != 0]
+    irm_gweis_without_zeroes = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in irm_transactions if t.execution_to_initiation_base_fee_difference_gwei != 0]
     axs3[1].hist(irm_gweis_without_zeroes, 50)
     axs3[1].spines.left.set_position('zero')
     
-    zscore_gweis_without_zeroes = [round(t.base_fee_per_gas_price_difference / 1_000_000_000) for t in zscore_transactions if t.base_fee_per_gas_price_difference != 0]
+    zscore_gweis_without_zeroes = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in zscore_transactions if t.execution_to_initiation_base_fee_difference_gwei != 0]
     axs3[2].hist(zscore_gweis_without_zeroes, 50)
     axs3[2].spines.left.set_position('zero')
     
