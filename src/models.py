@@ -146,16 +146,16 @@ class SafeTx(Base):
     # exectution time minus first confirmation time
     tx_initiation_to_execution_time_sec = Column(Integer, nullable=False)
     # execution block base fee minus first confirmation (previous) block base fee
-    execution_to_initiation_base_fee_difference = Column(Float, nullable=False)
+    execution_to_initiation_base_fee_difference_gwei = Column(Float, nullable=False)
     # execution tx fee payed minus first confirmation (previous) block estimated avarage tx fee
-    execution_to_initiation_paied_fee_difference = Column(
+    execution_to_initiation_paid_fee_difference_eth = Column(
         Float, nullable=False)
     # execution tx fee payed minus execution tx block estimated avarage tx fee
-    execution_fee_to_avarage_fee_difference = Column(Float, nullable=False)
+    execution_fee_to_avarage_fee_difference_eth = Column(Float, nullable=False)
 
     def __repr__(self):
-        return "<SafeTx(safe_tx_hash='%s', block_number='%s', tx_initiation_to_execution_time_sec='%s', execution_to_initiation_base_fee_difference='%s', execution_to_initiation_paied_fee_difference='%s', execution_fee_to_avarage_fee_difference='%s')>" \
-            % (self.safe_tx_hash, self.block_number, self.tx_initiation_to_execution_time_sec, self.execution_to_initiation_base_fee_difference, self.execution_to_initiation_paied_fee_difference, self.execution_fee_to_avarage_fee_difference)
+        return "<SafeTx(safe_tx_hash='%s', block_number='%s', tx_initiation_to_execution_time_sec='%s', execution_to_initiation_base_fee_difference_gwei='%s', execution_to_initiation_paid_fee_difference_eth='%s', execution_fee_to_avarage_fee_difference_eth='%s')>" \
+            % (self.safe_tx_hash, self.block_number, self.tx_initiation_to_execution_time_sec, self.execution_to_initiation_base_fee_difference_gwei, self.execution_to_initiation_paid_fee_difference_eth, self.execution_fee_to_avarage_fee_difference_eth)
 
     @staticmethod
     def all():
@@ -169,15 +169,15 @@ class SafeTx(Base):
     def create(safe_tx_hash,
                block_number,
                tx_initiation_to_execution_time_sec,
-               execution_to_initiation_base_fee_difference,
-               execution_to_initiation_paied_fee_difference,
-               execution_fee_to_avarage_fee_difference):
+               execution_to_initiation_base_fee_difference_gwei,
+               execution_to_initiation_paid_fee_difference_eth,
+               execution_fee_to_avarage_fee_difference_eth):
         tx = SafeTx(safe_tx_hash=safe_tx_hash,
                     block_number=block_number,
                     tx_initiation_to_execution_time_sec=tx_initiation_to_execution_time_sec,
-                    execution_to_initiation_base_fee_difference=execution_to_initiation_base_fee_difference,
-                    execution_to_initiation_paied_fee_difference=execution_to_initiation_paied_fee_difference,
-                    execution_fee_to_avarage_fee_difference=execution_fee_to_avarage_fee_difference)
+                    execution_to_initiation_base_fee_difference_gwei=execution_to_initiation_base_fee_difference_gwei,
+                    execution_to_initiation_paid_fee_difference_eth=execution_to_initiation_paid_fee_difference_eth,
+                    execution_fee_to_avarage_fee_difference_eth=execution_fee_to_avarage_fee_difference_eth)
         db.session.add(tx)
         db.session.commit()
         return tx
@@ -185,21 +185,33 @@ class SafeTx(Base):
     @staticmethod
     def process_transaction(data):
         """
-        data: [safe_tx_hash, block_number, created, executed, created_to_executed, eth_tx_hash]
+        data: [safe_tx_hash, block_number, created, executed, created_to_executed_sec, tx_hash, gas_used, gas_price_wei]
         """
         (safe_tx_hash, block_number, created, executed,
-         created_to_executed, eth_tx_hash) = tuple(data)
+         created_to_executed_sec, tx_hash, gas_used, gas_price_wei) = tuple(data)
+        created_to_executed_sec = int(created_to_executed_sec)
+        gas_used = int(gas_used)
+        gas_price_wei = int(gas_price_wei)
 
         block_of_initiation = Block.get_block_by_time(created)
         block_of_execution = Block.get_block_by_number(int(block_number))
-
+        
         execution_to_initiation_base_fee_difference = block_of_execution.base_fee_per_gas - \
             block_of_initiation.base_fee_per_gas
-
-        # Get block reward
-        # Substract 2
-        # Devide it by gas used --> reward per block
-        # Calculate estimated tx price at the moment of initiation
+            
+        # to estimate gas tip subtract 2 Eth from the reward and divide it by the gas used
+        estimated_gas_tip_for_initiation_block_wei = (block_of_initiation.block_reward - 2 * pow(10, 18)) / block_of_initiation.gas_used
+        estimated_gas_tip_for_execution_block_wei = (block_of_execution.block_reward - 2 * pow(10, 18)) / block_of_execution.gas_used
+        
+        execution_to_initiation_paid_fee_difference_eth = (gas_price_wei - block_of_initiation.base_fee_per_gas - estimated_gas_tip_for_initiation_block_wei) * gas_used / pow(10, 18)
+        execution_fee_to_avarage_fee_difference_eth = (gas_price_wei - block_of_execution.base_fee_per_gas - estimated_gas_tip_for_execution_block_wei) * gas_used / pow(10, 18)
+        
+        SafeTx.create(safe_tx_hash=safe_tx_hash,
+                      block_number=block_number,
+                      tx_initiation_to_execution_time_sec=created_to_executed_sec,
+                      execution_to_initiation_base_fee_difference_gwei=execution_to_initiation_base_fee_difference,
+                      execution_to_initiation_paid_fee_difference_eth=round(execution_to_initiation_paid_fee_difference_eth, 6),
+                      execution_fee_to_avarage_fee_difference_eth=round(execution_fee_to_avarage_fee_difference_eth, 6))
 
 
 # class Model(Base):

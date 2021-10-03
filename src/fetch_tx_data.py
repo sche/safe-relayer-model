@@ -19,13 +19,13 @@ as
 from history_multisigtransaction as t
 where ethereum_tx_id is not null
 order by created desc 
-limit 10)
+limit 100)
 
-select t.safe_tx_hash, et.block_id, t.created, b.timestamp as executed, (b.timestamp - t.created) as created_to_executed, t.ethereum_tx_id
+select t.safe_tx_hash, et.block_id, t.created, b.timestamp as executed, FLOOR(EXTRACT(EPOCH FROM (b.timestamp - t.created))) as created_to_executed_sec, et.tx_hash, et.gas_used, et.gas_price
 from history_ethereumtx as et
 join t on t.ethereum_tx_id = et.tx_hash
 join history_ethereumblock as b on b.number = et.block_id
-where b.timestamp != t.created --filter out transactions initiated not via our interface
+where EXTRACT(EPOCH FROM (b.timestamp - t.created)) > 0 --filter out transactions initiated not via our interface
     """
     
     # Use the COPY function on the SQL we created above.
