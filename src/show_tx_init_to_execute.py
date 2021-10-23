@@ -15,15 +15,13 @@ def main():
     subfigs = fig.subfigures(5, 1)
     subfigs[0].suptitle('tx initiation to execution (time in min)')
     subfigs[1].suptitle('cumulative')
-    subfigs[2].suptitle('base fee per gas price differences')
-    subfigs[3].suptitle('base fee per gas price differences without zeroes')
-    subfigs[4].suptitle('without zeroes cumulative')
+    subfigs[2].suptitle('base fee per gas price differences (gwei)')
+    subfigs[3].suptitle('cumulative (gwei)')
     
     axs0 = subfigs[0].subplots(1, 3)
     axs1 = subfigs[1].subplots(1, 3)
     axs2 = subfigs[2].subplots(1, 3)
     axs3 = subfigs[3].subplots(1, 3)
-    axs4 = subfigs[4].subplots(1, 3)
     
     # Transaction times
     times = [round(t.tx_initiation_to_execution_time_sec / 60, 2) for t in transactions]
@@ -53,39 +51,25 @@ def main():
     
     # Transaction gas difference
     
-    gweis = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in transactions]
+    gweis = [round(t.execution_to_initiation_base_fee_difference_wei / 1_000_000_000) for t in transactions]
     axs2[0].hist(gweis, 50)
     
-    irm_gweis = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in irm_transactions]
+    irm_gweis = [round(t.execution_to_initiation_base_fee_difference_wei / 1_000_000_000) for t in irm_transactions]
     axs2[1].hist(irm_gweis, 50)
     
-    zscore_gweis = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in zscore_transactions]
+    zscore_gweis = [round(t.execution_to_initiation_base_fee_difference_wei / 1_000_000_000) for t in zscore_transactions]
     axs2[2].hist(zscore_gweis, 50)
     
-    # Transaction gas difference without zeroes
+    # Transaction gas difference cumulative
     
-    gweis_without_zeroes = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in transactions if t.execution_to_initiation_base_fee_difference_gwei != 0]
-    axs3[0].hist(gweis_without_zeroes, 50)
+    axs3[0].hist(gweis, 50, density=True, cumulative=True)
     axs3[0].spines.left.set_position('zero')
     
-    irm_gweis_without_zeroes = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in irm_transactions if t.execution_to_initiation_base_fee_difference_gwei != 0]
-    axs3[1].hist(irm_gweis_without_zeroes, 50)
+    axs3[1].hist(irm_gweis, 50, density=True, cumulative=True)
     axs3[1].spines.left.set_position('zero')
     
-    zscore_gweis_without_zeroes = [round(t.execution_to_initiation_base_fee_difference_gwei / 1_000_000_000) for t in zscore_transactions if t.execution_to_initiation_base_fee_difference_gwei != 0]
-    axs3[2].hist(zscore_gweis_without_zeroes, 50)
+    axs3[2].hist(zscore_gweis, 50, density=True, cumulative=True)
     axs3[2].spines.left.set_position('zero')
-    
-    # Transaction gas difference without zeroes cumulative
-    
-    axs4[0].hist(gweis_without_zeroes, 50, density=True, cumulative=True)
-    axs4[0].spines.left.set_position('zero')
-    
-    axs4[1].hist(irm_gweis_without_zeroes, 50, density=True, cumulative=True)
-    axs4[1].spines.left.set_position('zero')
-    
-    axs4[2].hist(zscore_gweis_without_zeroes, 50, density=True, cumulative=True)
-    axs4[2].spines.left.set_position('zero')
     
     plt.show()
 
